@@ -1,0 +1,51 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  /* Arctic Frost — from the palette card */
+  --ice-white:   #f0f7ff;
+  --frost-1:     #e2eeff;
+  --frost-2:     #c8dff7;
+  --sky:         #7ab3e0;
+  --ocean:       #1e6fb5;
+  --navy:        #0a3d73;
+  --abyss:       #040e1f;
+
+  /* UI tokens */
+  --bg:           #eef5fd;
+  --surface:      rgba(255,255,255,0.85);
+  --border:       rgba(30,111,181,0.12);
+  --border-md:    rgba(30,111,181,0.22);
+  --border-str:   rgba(30,111,181,0.4);
+  --text:         #0a3d73;
+  --text-mid:     #2a6098;
+  --text-muted:   rgba(10,61,115,0.45);
+  --text-subtle:  rgba(10,61,115,0.25);
+  --shadow-sm:    0 2px 12px rgba(10,61,115,0.08);
+  --shadow-md:    0 6px 28px rgba(10,61,115,0.12);
+  --shadow-lg:    0 16px 56px rgba(10,61,115,0.16);
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, var(--ocean), var(--sky));
+  border-radius: 4px;
+}
