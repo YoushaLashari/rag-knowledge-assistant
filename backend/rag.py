@@ -1,8 +1,3 @@
-
-
-
-
-
 import faiss
 import numpy as np
 import pickle
@@ -10,7 +5,7 @@ import os
 import re
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from groq import Groq
 from dotenv import load_dotenv
 
@@ -19,14 +14,12 @@ load_dotenv()
 VECTOR_STORE_PATH = "vector_store.index"
 METADATA_PATH = "metadata.pkl"
 
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+embedding_model = TextEmbedding("BAAI/bge-small-en-v1.5")
 
 
-# ── FIX: Support PDF, TXT, and DOCX extraction ────────────────────────────────
 def extract_text(file_path, filename):
     ext = os.path.splitext(filename)[1].lower()
 
-    # ── PDF ──────────────────────────────────────────────────────────────────
     if ext == ".pdf":
         reader = PdfReader(file_path)
         text_data = []
@@ -40,12 +33,9 @@ def extract_text(file_path, filename):
                 })
         return text_data
 
-    # ── TXT ──────────────────────────────────────────────────────────────────
     elif ext == ".txt":
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             full_text = f.read()
-
-        # Split into pseudo-pages of ~3000 chars so it behaves like PDF pages
         page_size = 3000
         text_data = []
         for i in range(0, len(full_text), page_size):
@@ -58,26 +48,20 @@ def extract_text(file_path, filename):
                 })
         return text_data
 
-    # ── DOCX ─────────────────────────────────────────────────────────────────
     elif ext in (".docx", ".doc"):
         try:
             from docx import Document
         except ImportError:
-            raise ImportError(
-                "python-docx is not installed. Run: pip install python-docx"
-            )
-
+            raise ImportError("python-docx is not installed.")
         doc = Document(file_path)
         text_data = []
         page_num = 1
         buffer = ""
-
         for para in doc.paragraphs:
             text = para.text.strip()
             if not text:
                 continue
             buffer += text + "\n"
-            # Group ~3000 chars into one "page"
             if len(buffer) >= 3000:
                 text_data.append({
                     "text": buffer.strip(),
@@ -86,19 +70,16 @@ def extract_text(file_path, filename):
                 })
                 buffer = ""
                 page_num += 1
-
-        # Flush remaining text
         if buffer.strip():
             text_data.append({
                 "text": buffer.strip(),
                 "page": page_num,
                 "source": filename
             })
-
         return text_data
 
     else:
-        raise ValueError(f"Unsupported file type: {ext}. Supported: .pdf, .txt, .docx")
+        raise ValueError(f"Unsupported file type: {ext}")
 
 
 def chunk_text(text_data):
@@ -152,11 +133,10 @@ def process_documents(file_paths_and_names):
     if not new_chunks:
         return 0
 
-    new_embeddings = embedding_model.encode(
-        [c["text"] for c in new_chunks],
-        show_progress_bar=False
+    new_embeddings = np.array(
+        list(embedding_model.embed([c["text"] for c in new_chunks])),
+        dtype=np.float32
     )
-    new_embeddings = np.array(new_embeddings, dtype=np.float32)
 
     if existing_embeddings is not None and len(existing_embeddings) > 0:
         all_embeddings = np.vstack([existing_embeddings, new_embeddings])
@@ -188,11 +168,11 @@ def delete_document(doc_name):
         chunks = pickle.load(f)
     remaining = [c for c in chunks if c["source"] != doc_name]
     if remaining:
-        embeddings = embedding_model.encode(
-            [c["text"] for c in remaining],
-            show_progress_bar=False
+        embeddings = np.array(
+            list(embedding_model.embed([c["text"] for c in remaining])),
+            dtype=np.float32
         )
-        save_vector_store(np.array(embeddings, dtype=np.float32), remaining)
+        save_vector_store(embeddings, remaining)
     else:
         if os.path.exists(VECTOR_STORE_PATH):
             os.remove(VECTOR_STORE_PATH)
@@ -204,17 +184,14 @@ def _detect_target_doc(question: str, all_sources: list) -> str | None:
     q_lower = question.lower()
     best_match = None
     best_score = 0
-
     for source in all_sources:
         name = os.path.splitext(source)[0].lower()
         words = re.split(r'[\s\-_]+', name)
         words = [w for w in words if len(w) > 2]
         score = sum(1 for w in words if w in q_lower)
-
         if score > best_score:
             best_score = score
             best_match = source
-
     return best_match if best_score >= 1 else None
 
 
@@ -239,7 +216,7 @@ def answer_question(question, chat_history, target_doc=None):
         search_query = question
 
     question_vector = np.array(
-        embedding_model.encode([search_query]),
+        list(embedding_model.embed([search_query])),
         dtype=np.float32
     )
 
